@@ -72,6 +72,10 @@ You have to add *lib path* of your newly compiled Python to the system lib path.
 
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/py/lib
     
+To simplify installation process of Python modules let's install **pip package manager**. 
+
+    wget https://bootstrap.pypa.io/get-pip.py | /opt/py/bin/python
+    
 ## PostgreSQL with Python support
 
 Download source code.
@@ -189,7 +193,7 @@ What I am trying to point out here is that you should be careful when creating p
 
 # Hello world
 
-Very basic hello world function in plPython, ex.
+Let me show you how to write the classical hello world function
 
     create or replace function logic.hello_world()
     returns void as
@@ -200,20 +204,54 @@ Very basic hello world function in plPython, ex.
     plpy.info("hello world")
     $$
     LANGUAGE plpythonu VOLATILE;
+    
 
-As you can see from above example you are able to print out some messages. They go to stdout of PostgreSQL directly which means in production stout is redirected to a log file. Depending on PostgreSQL log level you can hide some unwanted messages from plPy function same as some context like which function calls which. Example of a verbose log level.
+As you can see from above example you are able to print out some log messages. They go to stdout of PostgreSQL directly which means in production stout is redirected to a log file. Depending on PostgreSQL log level you can hide some unwanted messages from plPy function same as some context like which function calls which. Example of a verbose log level.
 
     pie=# select * from logic.view_and_set_discounted_sales(20, 23) ;
-    INFO:  [view_and_set_discounted_sales] Updateing item id: 36 with new discounted price: 0.529331946972
+    INFO:  [view_and_set_discounted_sales] Updating item id: 36 with new discounted price: 0.529331946972
     CONTEXT:  PL/Python function "view_and_set_discounted_sales"
-    INFO:  [view_and_set_discounted_sales] Updateing item id: 40 with new discounted price: 5.03912459204
+    INFO:  [view_and_set_discounted_sales] Updating item id: 40 with new discounted price: 5.03912459204
     CONTEXT:  PL/Python function "view_and_set_discounted_sales"
-    INFO:  [view_and_set_discounted_sales] Updateing item id: 45 with new discounted price: 3.37963644177
+    INFO:  [view_and_set_discounted_sales] Updating item id: 45 with new discounted price: 3.37963644177
     CONTEXT:  PL/Python function "view_and_set_discounted_sales"
 
-PostgreSQL with above log level (notice) will not only show you your *info* messages but also **context**. That is something that is very helpful with debugging production cases. Once function is being called from context you can see what kind of triggers or sub-functions were called.
+PostgreSQL with above log level (notice) will not only show you your *info* messages but also **context**. That is something that is very helpful with debugging production cases. Once function is being called from context you can see what kind of triggers or sub-functions were called. Example message
 
-As I mentioned before you have an access to all python modules and standard libraries. Below you can see how to access Redis and store some data in it. 
+    INFO:  [view_and_set_discounted_sales] Updating item id: 45 with new discounted price: 3.37963644177
+    CONTEXT:  PL/Python function "view_and_set_discounted_sales"
+    
+Let's analyze that example.
+
+*INFO* - log level of the message
+*[view_and_set_discounted_sales] Updating item id: 45 with new discounted price: 3.37963644177* - Custom message that function prints out
+*CONTEXT:  PL/Python function "view_and_set_discounted_sales"* - context in which above message has been logged.
+
+To be able to control **log level** that PostgreSQL is going to catch or ignore please use below options in postgresql.conf settings. 
+
+**client_min_messages** - Controls which message levels are sent to the client (ex. postgreSQL shell)
+
+**log_min_messages** - Controls which message levels are written to the server log
+
+
+
+Available values of log level in order of decreasing detail:
+1. debug5
+2. debug4
+3. debug3
+4. debug2
+5. debug1
+6. log
+7. notice
+8. warning
+9. error
+
+
+As I mentioned before you have an access to all Python modules and standard libraries. First install Redis module.
+
+    /opt/py/bin/pip install redis
+    
+ Below you can see how to access Redis and store some data in it.
 
     create or replace function logic.get_active_bills()
     returns text as
@@ -290,7 +328,7 @@ In below example I want to make a copy of data when field *row_change_time* is g
     LANGUAGE plpythonu VOLATILE;
 
 
-More complex example can be plPy function which takes 2 arguments and returns set of records which are considered by PostgreSQL as a table. Such a table works as view which of course can be used in regular SQL queries. Below I pasted a function which for given bill number will apply given discount.
+More complex example can be plpython function which takes 2 arguments and returns set of records which are considered by PostgreSQL as a table. Such a table works as view which of course can be used in regular SQL queries. Below I pasted a function which for given bill number will apply given discount.
 
     create or replace function logic.view_and_set_discounted_sales(
     in_bill_number bigint,
