@@ -35,40 +35,40 @@ Example piece of pseudo code in Django ORM
 
 With this simple example you can see how easy it is to customize save method in Django ORM. By having such a custom code you can put some business logic in there. For instance you are able to validate data prior to saving it in a database. The options are unlimited here.
 
-Some developers prefer to have business logic as a bunch of classes and functionalities stored in them. That is also a good solution as long as you keep attention and always is only one source of truth (code/functionality repetitions).
+Some developers prefer to have business logic as a bunch of classes with functionalities in them. That is also a good solution as long as you pay attention and always is only one source of truth.
 
 ## Source of truth
 
 To explain to you what I call *source of truth* let me allow myself to use some example. Imagine web application that uses database as data storage and it accepts some page form being posted but in different views. Let's assume that mentioned form can have slight differences in those views. What you expect from your system based on given input (submitted page form) is to always validate and process data in exact same way. For example your system is going to check if there is any duplication in database, validate required data and data types. Obvious is that system based on given input always has to react in the same way and return designed result.
 
-That is what I am going to use in this article as *source of truth*. Each time input is given system will react in the same way. Each entry point of the system which uses the same context of data will react in the same way.
+That is what I am going to use in this article as *source of truth*, in other words *Business Logic*. Each time input is given system will react in the same way. Each entry point of the system which uses the same context of data will react in the same way.
 
 
 ## Why not ORM?
 
-Using ORM as a business logic container definitely has a lot of pros, although there is one serious problem with it. If you have a project which uses DB that is shared with other projects and those use different languages...then... You are going to use API for such interactions with third-party software projects. How about if you have to deal with legacy code where there is not such option to have API? Where to have business logic with one source of truth. How about using DB as a main source of trust?
+Using ORM as a business logic container definitely has a lot of pros, although there is one serious problem with it. If you have a project which uses DB that is shared with other projects and those use different languages...then... you mostly are going to use API for such interactions with third-party software projects. What if you have to deal with legacy code where where having API is not an option? Where to store your single source of truth, iow. your business logic? How about using the database as one?
 
 ## Python
 
-Compiling Python is not a difficult process. Let me show you in few simples steps how to do it.
+Compiling Python is not a difficult process. Let me show you in a few simples steps how to do it.
 
 Download python source code
 
     wget https://www.python.org/ftp/python/2.7.10/Python-2.7.10.tgz
 
-Compile it. Warning, Please pay attention about –enable-shared flag! Th
+Compile Python under your custom directory (*—prefix* flag). In below example I'm ging to compile Python under */opt/py* to make sure that Python which later on I will use with PostgreSQL is not conflicting with Python that is installed with operating system. Custom python also has on advantage. If operating system (ex. Linux) comes with Python that is essential part of system tools (ex. yum) it is always good idea to isolate Python that you're about to use with your application from system's Python.
+
+Please make sure to add –enable-shared flag during compilation. This option will tell Python to compile with shared librares. Once Python libraries are compiled with shared option then any software can soft link them and use Python.
 
     ~/stuff/Python-2.7.10% ./configure —prefix=/opt/py –enable-shared
 
-It is very important to remember to compile python with **–enable-shared** option. Without it during PostgreSQL compilation you're not going to be able to use compiled Python as procedural language extension.
-
-Also on some systems if you try to run Python and you’re getting this kind of error
+Once compilation is finished, some operating systems when you try to run your compiled Python can return below error message.
 
     py ➤ bin/python2.7
 
-**bin/python2.7: error while loading shared libraries: libpython2.7.so.1.0: cannot open shared object file: No such file or directory**
+    bin/python2.7: error while loading shared libraries: libpython2.7.so.1.0: cannot open shared object file: No such file or directory**
 
-Then you need to add lib path of your newly compiled python to the system lib path
+Then you need to add *lib path* of your newly compiled python to the system lib path. For instance you can add below linbe to your .bashrc file.
 
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/py/lib
     
