@@ -2,7 +2,7 @@
 
 ## Introduction
 
-In my opinion PostgreSQL is the most advanced open source database. It has so many powerful features that is really difficult to put all of them in this one acticle.
+In my opinion PostgreSQL is the most advanced open source database. It has so many powerful features that is really difficult to put all of them in this one article.
 
 Below I'm going to show you the least known features of PostgreSQL which is procedural languages and stored functions. By using stored procedures we are going to build business logic step by step.
 
@@ -58,7 +58,7 @@ Download python source code
 
 Compile Python under your custom directory (*—prefix* flag). In below example I'm ging to compile Python under */opt/py* to make sure that Python which later on I will use with PostgreSQL is not conflicting with Python that is installed with operating system. Custom Python also has got one significant advantage. If operating system (ex. Linux) comes with Python that is main part of system tools (ex. yum) it is always good idea to isolate Python that you're about to use with your application from system's Python.
 
-Please make sure to add *–enable-shared* flag during compilation. This option will tell Python to compile with shared librares. Once Python libraries are compiled with shared option then any software can soft link them and use Python.
+Please make sure to add *–enable-shared* flag during compilation. This option will tell Python to compile with shared libraries. Once Python libraries are compiled with shared option then any software can soft link them and use Python.
 
     ~/stuff/Python-2.7.10% ./configure —prefix=/opt/py –enable-shared
 
@@ -227,7 +227,7 @@ Let's stop here for a minute and analyze that example.
 *[view_and_set_discounted_sales] Updating item id: 45 with new discounted price: 3.37963644177* - Custom message that function prints out
 *CONTEXT:  PL/Python function "view_and_set_discounted_sales"* - context in which above message has been logged.
 
-To be able to control **log level** that PostgreSQL is going to catch or ignore please use below options in postgresql.conf settings. 
+To be able to control **log level** that PostgreSQL is going to catch or ignore please use one of below options in /opt/pgsql/postgresql.conf settings file. 
 
 **client_min_messages** - Controls which message levels are sent to the client (ex. postgreSQL shell)
 
@@ -327,7 +327,7 @@ For building business logic in database I will use two main things:
 
 ## Triggers
 
-Triggers are going to help me with making my data to be consistant. Doesn't matter if tables are going to be controlled by ORM or they are going to get accessed by using pure SQL. Each time data is being changed trigger will be used with corresponding function. Of course based on which conditions PostgreSQL engine will call triggered function is up to you to define.
+Triggers are going to help me with making my data to be consistent. Doesn't matter if tables are going to be controlled by ORM or they are going to get accessed by using pure SQL. Each time data is being changed trigger will be used with corresponding function. Of course based on which conditions PostgreSQL engine will call triggered function is up to you to define.
 
 Trigger function can be call before or after
 
@@ -556,7 +556,7 @@ Caching here was just an example. It also returns JSON structure instead of set 
 1. Logic on DB side makes many things simpler and much cleaner to control.
 2. By having triggers you do not have to worry if data is going to be changed from your application, ORM, raw SQL or any third-party modules.
 3. Simple to debug and replicate bugs.
-4. Multiprocessing (ctronller by database).
+4. Multiprocessing (controlled by database).
 5. Direct access to data (all is running on DB side).
 6. Clear separation from business logic and the actual code of application (dry code).
 
