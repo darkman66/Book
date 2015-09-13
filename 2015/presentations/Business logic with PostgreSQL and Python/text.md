@@ -452,11 +452,9 @@ As you can see in above example it is possible to create function which allows y
 
 ## Simple cache
 
-In some cases it is really desired to have quick responses from DB. For heavy system most of developers will use caching systems that are coming with framework. That of course is fair but before data is accessible from cache we have to put data there which means we have to pre-fill cache by executing some SQL queries and cache the results.
+Let's put all the mentioned triggers and plpython functions together into one working business logic. Let's create simple caching system.
 
-Let me show you different approach. To demonstrate you how to build business logic by using mentioned triggers and function let's try to build caching system.
-
-Let's start with triggers. Each time table *bill* is going to get updates I will revalidate only that chunk of data that has changed and save the result to Redis cache. I will serialize such a data in Redis by using cPickle module. Trigger definition is going to be like this.
+Let's start with triggers. Each time table *bill* is going to get updates I will revalidate only that chunk of data that has changed and save the result to Redis cache. Trigger definition is going to be like this.
 
     CREATE TRIGGER t_bill_i
         AFTER INSERT OR UPDATE ON bill
@@ -523,7 +521,7 @@ Once data is being saved to Redis we can access such data by using below plpytho
     $$
     LANGUAGE plpythonu VOLATILE;
             
-As you may see above example is going to return JSON object. For instance such a data can be returned directly to a browser without post processing (if you;re writing web application). 
+As you may see above example is going to return JSON object. For instance such a data can be returned directly to a browser without post processing (if you're writing web application). 
 
 To demonstarte you how to call above function from Python please use below example.
 
