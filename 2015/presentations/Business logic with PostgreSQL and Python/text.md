@@ -318,28 +318,30 @@ First comes first. Below you can see structure of tables and relations for datab
     
     CREATE SEQUENCE public.bill_number_seq;
 
-## Business logic basics
+## Main pattern
 
-For building business logic in database I will use trigger functions on tables that I am going to create. Doesn't matter if tables are going to be controlled by any ORM or they are going to get accessed by using pure SQL. Each time data is being changed trigger will be used and corresponding trigger function is going to be called. Of course when to call triggered function is up to your defined use cases. Actions can be taken before or after update, insert or delete statement.
+For building business logic in database I will use two main things:
 
-Example trigger on table foo is going to be called after insert
+* triggers with trigger functions on tables
+* plpython functions to access data from database
+
+## Triggers
+
+Triggers are going to help me with making my data to be consistant. Doesn't matter if tables are going to be controlled by ORM or they are going to get accessed by using pure SQL. Each time data is being changed trigger will be used with corresponding function. Of course based on which conditions PostgreSQL engine will call triggered function is up to your define.
+
+Trigger function can be call before or after
+
+* update
+* insert 
+* delete
+
+How to define trigger on a table foo you can see below. Trigger function *my_trigger_function* will be called *after insert* of each record.
 
     CREATE TRIGGER my_trigger
         AFTER INSERT ON table_foo
             FOR EACH ROW EXECUTE PROCEDURE my_trigger_function();
-
-
-
-## Learning by doing
-
-
-To be able to protect some data from table foo from being deleted (by saving copy of data to backup table) let's use same trigger logic although this time before delete statement, ex.
-
-    CREATE TRIGGER my_trigger_before_delete
-        BEFORE DELETE ON foo
-            FOR EACH ROW EXECUTE PROCEDURE protect_data();
-
-Structure of table *foo* and *foo_backup* is like below.
+            
+To show you how trigger can be applied to tables let's try to take a look closer to below example. Let's create table *foo* and *foo_backup*. Structure of these tables is following:
 
     CREATE TABLE foo
     (
@@ -350,7 +352,13 @@ Structure of table *foo* and *foo_backup* is like below.
       CONSTRAINT foo_email_key UNIQUE (e_mail)
     );
 
-In below example I want to make a copy of data when field *row_change_time* is greater then 15 minutes. 
+To be able to protect data in table *foo* from being deleted let's apply a trigger in that table.
+
+    CREATE TRIGGER my_trigger_before_delete
+        BEFORE DELETE ON foo
+            FOR EACH ROW EXECUTE PROCEDURE protect_data();
+
+I will make a copy of data when field *row_change_time* is greater then 15 minutes. 
 
     create or replace function protect_data()
     returns trigger as
@@ -358,16 +366,25 @@ In below example I want to make a copy of data when field *row_change_time* is g
     from datetime import datetime
     
     v = datetime.now() - datetime.strptime(TD['old']['row_change_time'][:19], '%Y-%m-%d %H:%M:%S')
+    
     if v.seconds/60.0 > 15:
-        # bachup data before losing it
-    	plpy.execute("INSERT INTO foo_backup (row_change_time, e_mail) VALUES ('{0}', '{1}')".format(TD['old']['row_change_time'], TD['old']['e_mail']))
+        # backup data before losing it
+        plpy.info('Backing up data...')
+        sql = """INSERT INTO foo_backup (row_change_time, e_mail) 
+                    VALUES ('{0}', '{1}')".format(TD['old']['row_change_time'],
+                                                TD['old']['e_mail'])
+    	plpy.execute(sql)
     
     
     $$
     LANGUAGE plpythonu VOLATILE;
+    
 
+## plpython functions 
 
-More complex example can be plpython function which takes 2 arguments and returns set of records which are considered by PostgreSQL as a table. Such a table works as view which of course can be used in regular SQL queries. Below I pasted a function which for given bill number will apply given discount.
+As it was already mentioned another PostgreSQL feature which is going to be used to build business logic in DB are *plpython functions*. These functions will be used by all the applications that will access database. Each time I will try to modify or read some data in database *pie* I will call a function instead of a table directly.
+
+Example of such approach can be plpython function which takes 2 arguments and returns set of records which are considered by PostgreSQL as a table. Such a table works as view which of course can be used in regular SQL queries. Below I pasted a function which for given bill number will apply given discount. Just to remind you table structures were shown in chaper "schema*.
 
     create or replace function logic.view_and_set_discounted_sales(
     in_bill_number bigint,
