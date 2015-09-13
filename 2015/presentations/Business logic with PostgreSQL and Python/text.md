@@ -327,7 +327,7 @@ For building business logic in database I will use two main things:
 
 ## Triggers
 
-Triggers are going to help me with making my data to be consistant. Doesn't matter if tables are going to be controlled by ORM or they are going to get accessed by using pure SQL. Each time data is being changed trigger will be used with corresponding function. Of course based on which conditions PostgreSQL engine will call triggered function is up to your define.
+Triggers are going to help me with making my data to be consistant. Doesn't matter if tables are going to be controlled by ORM or they are going to get accessed by using pure SQL. Each time data is being changed trigger will be used with corresponding function. Of course based on which conditions PostgreSQL engine will call triggered function is up to you to define.
 
 Trigger function can be call before or after
 
@@ -341,7 +341,7 @@ How to define trigger on a table foo you can see below. Trigger function *my_tri
         AFTER INSERT ON table_foo
             FOR EACH ROW EXECUTE PROCEDURE my_trigger_function();
             
-To show you how trigger can be applied to tables let's try to take a look closer to below example. Let's create table *foo* and *foo_backup*. Structure of these tables is following:
+To show you how trigger can be applied on tables let's try to look closer on below example. Let's create table *foo* and *foo_backup*. Structure of these tables is following:
 
     CREATE TABLE foo
     (
@@ -454,13 +454,46 @@ As you can see in above example it is possible to create function which allows y
 
 In some cases it is really desired to have quick responses from DB. For heavy system most of developers will use caching systems that are coming with framework. That of course is fair but before data is accessible from cache we have to put data there which means we have to pre-fill cache by executing some SQL queries and cache the results.
 
-Let me show you different approach. If you create a plpython function which fills cache with data that you want to cache how to validate data? I will use trigger here. Each time one of my tables from which I want to cache data are going to get updates I will revalidate only that chunk of data that has changed. 
+Let me show you different approach. To demonstrate you how to build business logic by using mentioned triggers and function let's try to build caching system.
+
+Let's start with triggers. Each time table *bill* is going to get updates I will revalidate only that chunk of data that has changed and save the result to Redis cache. I will serialize such a data in Redis by using cPickle module. Trigger definition is going to be like this.
+
+    CREATE TRIGGER t_bill_i
+        AFTER INSERT OR UPDATE ON bill
+        FOR EACH ROW EXECUTE PROCEDURE logic.tgr_bill_i();
 
 As I mentioned before you have an access to all Python modules and standard libraries, so let's install Redis module.
 
     /opt/py/bin/pip install redis
+
+Body of trigger function *logic.tgr_bill_i* you can see below.
+
+    create or replace function logic.tgr_bill_i()
+    returns trigger as
+    $$
+    import redis
+    from cPickle import dumps
+    in_server = '127.0.0.1'
+    in_port = 6379
     
- Below you can see how to access Redis and store some data in it.
+    POOL = redis.ConnectionPool(host=in_server, port = in_port if in_port is not None else 6379, db = 1)
+    r = redis.Redis(connection_pool = POOL)
+    
+    if TD['new']['bill_created']:
+        bill_key = 'bill_active:%s' % TD['new']['field_hash']
+        r.set(bill_key, dumps({
+            'bill_created' : TD['new']['bill_created'],
+            'shop_code' : TD['new']['shop_code'],
+            'field_hash' : TD['new']['field_hash'],
+            'id' : TD['new']['id'],
+            'client_id' : TD['new']['client_id']
+            }))
+        plpy.info('[tgr_bill_i] Saving bill hash: {0}'.format(bill_key))
+    $$
+    LANGUAGE plpythonu VOLATILE;
+
+
+Once data is being saved to Redis we can access such data by using below plpython function.
 
     create or replace function logic.get_active_bills()
     returns text as
@@ -489,58 +522,28 @@ As I mentioned before you have an access to all Python modules and standard libr
     return encode({'status' : status, 'data' : all_bills})
     $$
     LANGUAGE plpythonu VOLATILE;
+            
+As you may see above example is going to return JSON object. For instance such a data can be returned directly to a browser without post processing (if you;re writing web application). 
 
-Once data is being changed on table *bill* I am going to revalidate such a data in my cache. For caching I will use Redis. To be able to tell Redis what to update I will use trigger function as below.
-
-    CREATE TRIGGER t_bill_i
-        AFTER INSERT ON bill
-        FOR EACH ROW EXECUTE PROCEDURE logic.tgr_bill_i();
-
-In that case each time bill data is being inserted I will save such a data to my Redis cache by calling function *logic.tgr_bill_i()* which you can see below.
-
-    create or replace function logic.tgr_bill_i()
-    returns trigger as
-    $$
-    import redis
-    from cPickle import dumps
-    in_server = '127.0.0.1'
-    in_port = 6379
-    
-    POOL = redis.ConnectionPool(host=in_server, port = in_port if in_port is not None else 6379, db = 1)
-    r = redis.Redis(connection_pool = POOL)
-    
-    if TD['new']['bill_created']:
-        bill_key = 'bill_active:%s' % TD['new']['field_hash']
-        r.set(bill_key, dumps({
-            'bill_created' : TD['new']['bill_created'],
-            'shop_code' : TD['new']['shop_code'],
-            'field_hash' : TD['new']['field_hash'],
-            'id' : TD['new']['id'],
-            'client_id' : TD['new']['client_id']
-            }))
-        plpy.info('[tgr_bill_i] Saving bill hash: {0}'.format(bill_key))
-    $$
-    LANGUAGE plpythonu VOLATILE;
-
-
-From my application I can read data from Redis cache by calling function *logic.get_active_bills()* which I showed in one of previous paragraphs. Example code which will read from cache.
+To demonstarte you how to call above function from Python please use below example.
 
     import psycopg2
     import psycopg2.extras
-
+    
     def read_bills():
         conn = psycopg2.connect(my_connection_string)
         cur = conn.cursor('foo', cursor_factory=psycopg2.extras.DictCursor)
-        
+    
         sql = "SELECT * FROM logic.get_active_bills()"
         cur.execute(sql)
-        for k in cur:
-            # some code code code
-            
+        res = cPickle.loads(conn.fetchall()[0]['get_active_bills'])
         
-It is worth of mentioning that I used two things there. As mentioned one is function which reads cached data and second is named cursor. That one allows me to read big number of records by iterating over them instead of getting all the results at once and store them in memory.
+        return res # JSON structure
+        
+    if __name__ == '__main__':
+        print 'This is my JSON result from cache', read_bills()
 
-Most important and actually the essential part of this article is to notice that by **calling function** instead of making SQL query which gets **data from table** directly I am making sure that I actually use my business logic. By getting data directly from a table like 
+Most important part of above example is to notice that I'm **calling function** instead of making SQL query which gets **data from table** directly. BY doing so I am making sure that I actually use my business logic. By getting data directly from a table like 
 
     sql = "SELECT * FROM bill"
 
