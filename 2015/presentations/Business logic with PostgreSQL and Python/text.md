@@ -8,7 +8,7 @@ Below I'm going to show you the least known features of PostgreSQL which is proc
 
 ## Business logic
 
-This term we are going to call all of those blocks of code which are responsible for making calculations and taking decisions about data flow. In many cases most of developers decide to build business logic as part ORM models. It is pretty convenient. Whenever data is being used from database ORM can take control and decide how data is going to be returned to upper objects. Some ORM frameworks like Django allow us to extend base model and start building our own logic in a very complex way.
+By business logic we are going to call all of those blocks of code which are responsible for making calculations and taking decisions about data flow. In many cases most of developers decide to build business logic as part of ORM models. It is pretty convenient. Whenever data is being used from database ORM can take control and decide how data is going to be returned to upper objects. Some ORM frameworks like Django allow us to extend base model and start building our own logic in a very complex way.
 
 Example piece of pseudo code in Django ORM
 
@@ -33,9 +33,16 @@ Example piece of pseudo code in Django ORM
           # also we can have another level of customization here
           super(History, self).save(*args, **kwargs)
 
-By this simple example you can see how easily it is to customize save method in Django ORM. By having such a custom code you can put some business logic in there. For instance you are able to prevalidate data before saving or modify data before save takes an action. There are unlimited options.
+With this simple example you can see how easy it is to customize save method in Django ORM. By having such a custom code you can put some business logic in there. For instance you are able to validate data prior to saving it in a database. The options are unlimited here.
 
 Some developers prefer to have business logic as a bunch of classes and functionalities stored in them. That is also a good solution as long as you keep attention and always is only one source of truth (code/functionality repetitions).
+
+## Source of truth
+
+To explain to you what I call *source of truth* let me allow myself to use some example. Imagine web application that uses database as data storage and it accepts some page form being posted but in different views. Let's assume that mentioned form can have slight differences in those views. What you expect from your system based on given input (submitted page form) is to always validate and process data in exact same way. For example your system is going to check if there is any duplication in database, validate required data and data types. Obvious is that system based on given input always has to react in the same way and return designed result.
+
+That is what I am going to use in this article as *source of truth*. Each time input is given system will react in the same way. Each entry point of the system which uses the same context of data will react in the same way.
+
 
 ## Why not ORM?
 
@@ -49,9 +56,9 @@ Download python source code
 
     wget https://www.python.org/ftp/python/2.7.10/Python-2.7.10.tgz
 
-Compile it. Warning, Please pay attention about –enable-shared flag!
+Compile it. Warning, Please pay attention about –enable-shared flag! Th
 
-    ~/stuff/Python-2.7.10% ./configure —PREFIX=/opt/py –enable-shared
+    ~/stuff/Python-2.7.10% ./configure —prefix=/opt/py –enable-shared
 
 It is very important to remember to compile python with **–enable-shared** option. Without it during PostgreSQL compilation you're not going to be able to use compiled Python as procedural language extension.
 
