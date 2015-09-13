@@ -56,19 +56,19 @@ Download python source code
 
     wget https://www.python.org/ftp/python/2.7.10/Python-2.7.10.tgz
 
-Compile Python under your custom directory (*—prefix* flag). In below example I'm ging to compile Python under */opt/py* to make sure that Python which later on I will use with PostgreSQL is not conflicting with Python that is installed with operating system. Custom python also has on advantage. If operating system (ex. Linux) comes with Python that is essential part of system tools (ex. yum) it is always good idea to isolate Python that you're about to use with your application from system's Python.
+Compile Python under your custom directory (*—prefix* flag). In below example I'm ging to compile Python under */opt/py* to make sure that Python which later on I will use with PostgreSQL is not conflicting with Python that is installed with operating system. Custom Python also has got one significant advantage. If operating system (ex. Linux) comes with Python that is main part of system tools (ex. yum) it is always good idea to isolate Python that you're about to use with your application from system's Python.
 
-Please make sure to add –enable-shared flag during compilation. This option will tell Python to compile with shared librares. Once Python libraries are compiled with shared option then any software can soft link them and use Python.
+Please make sure to add *–enable-shared* flag during compilation. This option will tell Python to compile with shared librares. Once Python libraries are compiled with shared option then any software can soft link them and use Python.
 
     ~/stuff/Python-2.7.10% ./configure —prefix=/opt/py –enable-shared
 
-Once compilation is finished, some operating systems when you try to run your compiled Python can return below error message.
+When compilation is finished, some operating systems when you try to run your compiled Python can return below error message.
 
     py ➤ bin/python2.7
 
     bin/python2.7: error while loading shared libraries: libpython2.7.so.1.0: cannot open shared object file: No such file or directory**
 
-Then you need to add *lib path* of your newly compiled python to the system lib path. For instance you can add below linbe to your .bashrc file.
+You have to add *lib path* of your newly compiled Python to the system lib path. For instance you can add below linbe to your .bashrc file. In my case I compiled Python under */opt/py* so that is why I added path as below.
 
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/py/lib
     
@@ -78,44 +78,100 @@ Download source code.
 
     wget https://ftp.postgresql.org/pub/source/v9.4.4/postgresql-9.4.4.tar.bz2
 
-Compile with Python support from */opt/py* directory
+Compile with Python support from */opt/py* directory. Same as during Python compilation I'm going to compile PostgreSQL under custom directory (*--prefix* flag) */opt/pgsql*.
 
     ./configure –prefix=/opt/pgsql —with-python PYTHON=/opt/py/bin/python
+    
     make
+    
     make install
 
-Now compile and install PostgreSQL plugins
+Now you have to compile and install PostgreSQL plugins
 
-    cd ~/stuff/postgresql-9.4.3/contrib
+    cd contrib
+    
     make
+    
     make install
 
 ## Create DB
 
-Now it is time to start PostgreSQL. First you have to initialize name space.
+Now it is time to start PostgreSQL. First you have to initialize name space. I used */opt/pg_data* directory for PostgreSQL storage.
 
     mkdir /opt/pg_data
     /opt/pgsql/bin/initdb /opt/pg_data
 
-and start DB…
+and start DB. Below command  will start PostgreSQL which is going to listen on all interfaces and port *5432* (default) and data directory (*-D* option) is going to be /opt/pg_data.
 
     /opt/pgsql/bin/postmaster -p 5432 -D /opt/pg_data/
 
-Create new DB.
+Create new empty database *pie* with encoding  **UTF-8** (*-E* option). Option *-h* tells createdb command that PostgreSQL server listens on *localhost* and oport *5432* (option *-p*).
 
-    /opt/pgsql/bin/createdb -h localhost  -E utf8 pie
+    /opt/pgsql/bin/createdb -h localhost -p5432  -E utf8 pie
 
-Please remember about the correct encoding for DB! Now create new language for database pie
+Install Python support for database *pie*. Again we have to specify localhost (-h) and port (-p) that is being used by the server. Option *-d* allow you to create **plpythonu** language under *pie* database. Please notice that language that I created in below example is called **plpythonu*. Letter *u* stands for untrusted. Why untrusted? That is more about history of PostgresQL and Python support.
 
-    /opt/pgsql/bin/createlang -h localhost  -d pie plpythonu
+    /opt/pgsql/bin/createlang -h localhost -p5432 -d pie plpythonu
     
 And that's it. Simple as that. Your new DB has full Python support and we can start organizing business logic in there.
 
 ## Word of the day
 
-Before you are going to create your first plPython (PostgreSQL stored Python functions) you have to know how it works. Your newly compiled Python and its modules are fully accessible from plPython. This means that the entire Python standard library is fully accessible when writing your business logic. Also you can install any kind of module which you may use later from your functions.
+Before you are going to create your first plpython function you have to know how it works. Your compiled Python and its modules are fully accessible from plpython. This means that the entire Python standard library is fully accessible when writing your business logic. Also you can install any kind of module which you may use later from your functions.
 
-I have to make some other clarification here. Term "procedural" and "function" can be a little bit confusing here. Procedural programming is not the only pattern that you can use in plPython. Once you create plpy function then the actual body of it can be pretty complex object. For sure I am not trying to convince you here that object programming in such a case like business logic in DB is the right way. Zen of Python described it as below. Read it again, again, and... again before you start writing actually any Python code.
+I need to provide additional clarifications here, both terms 'procedural' and 'function' can be a little bit confusing for newcomers. Generally from PostgreSQL perspective you create function (plpython). You always call plpython function which is stored in DB. What is "inside" of that function (Python objects or other functions) is up to you. Procedural programming is not the only pattern that you can use inside of plpython. Once you create plpython function then the actual body of it can be pretty complex object as for example
+
+    create or replace function my_first_function()
+    returns int as
+    $$
+    
+    class MyObjectA:
+        def __init__(self):
+            """some body of constructor"""
+            
+        def methodA(self, param_1, param_2):
+            """body of the method"""
+            
+    class MyObjectB:
+        def __init__(self):
+            """some body of constructor"""
+            
+        def methodB(self, param_1, param_2):
+            """body of the method"""
+    
+    b = methodB()
+    a = MyObjectA()
+    plpy.info("Some info message")
+    return b.methodB(a.methodA(10, 15), "some string")
+    
+    
+    $$
+    LANGUAGE plpythonu VOLATILE;
+    
+Example of calling such a plpython function
+
+    sql: SELECT * FROM my_first_function();
+    
+Same plpython function but with much simpler body
+
+    create or replace function my_first_function()
+    returns int as
+    $$
+    
+    import random
+    
+    return random.randint(1,20)
+    
+    $$
+    LANGUAGE plpythonu VOLATILE;
+    
+Example of calling such a plpython function
+
+    sql: SELECT * FROM my_first_function();
+
+You may notice that from PostgreSQL engine perspective calling *my_first_function* looks identical even if the actual body of function written in plpython is either flat function or complex object.
+
+As for business logic that I will show you I am not trying to convince you to start using procedural against object programming or the other way around. As I already said - it is up to you to decide what will fit best when writing plpython functions, although please read below Zen of Python. Again, again, and... again before you start writing actually any Python code.
 
 > Beautiful is better than ugly.
 
@@ -129,7 +185,7 @@ I have to make some other clarification here. Term "procedural" and "function" c
 
 > If the implementation is hard to explain, it’s a bad idea
 
-What I am trying to say here is that just to be careful with creating plpy functions. Not to heavy, not too complex. Simplicity can bring you a lot of benefits later when you have to squash a bug.
+What I am trying to point out here is that you should be careful when creating plpython functions, they should not be too complex. Simplicity can bring you a lot of benefits, especially when debugging the code to nail a bug.
 
 # Hello world
 
