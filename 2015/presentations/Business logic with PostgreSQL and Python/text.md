@@ -123,7 +123,7 @@ And that's it. Simple as that. Your new DB has full Python support and we can st
 
 Before you are going to create your first plpython function you have to know how it works. Your compiled Python and its modules are fully accessible from plpython. This means that the entire Python standard library is fully accessible when writing your business logic. Also you can install any kind of module which you may use later from your functions.
 
-I need to provide additional clarifications here, both terms 'procedural' and 'function' can be a little bit confusing for newcomers. Generally from PostgreSQL perspective you create function (plpython). You always call plpython function which is stored in DB. What is "inside" of that function (Python objects or other functions) is up to you. Procedural programming is not the only pattern that you can use inside of plpython. Once you create plpython function then the actual body of it can be pretty complex object as for example
+I need to provide additional clarifications here, both terms 'procedural' and 'function' can be a little bit confusing for newcomers. Generally from PostgreSQL perspective you always create plpython function. You call plpython function which is stored in DB. What is "inside" of that function (Python objects or other functions) is up to you to decide. Procedural programming is not the only pattern that you can use inside of plpython. To illustrate two different bodies of function please check example from below.
 
     create or replace function my_first_function()
     returns int as
@@ -175,7 +175,7 @@ Example of calling such a plpython function
 
 You may notice that from PostgreSQL engine perspective calling *my_first_function* looks identical even if the actual body of function written in plpython is either flat function or complex object.
 
-As for business logic that I will show you I am not trying to convince you to start using procedural against object programming or the other way around. As I already said - it is up to you to decide what will fit best when writing plpython functions, although please read below Zen of Python. Again, again, and... again before you start writing actually any Python code.
+As for business logic with Python inside of database that I want show you I am not trying to convince you to start using procedural programming against object programming or the other way around. As I already said - it is up to you to decide what will fit best when writing plpython functions, although please read below Zen of Python. Again, again, and... again before you start writing actually any Python code.
 
 > Beautiful is better than ugly.
 
@@ -216,12 +216,12 @@ As you can see from above example you are able to print out some log messages. T
     INFO:  [view_and_set_discounted_sales] Updating item id: 45 with new discounted price: 3.37963644177
     CONTEXT:  PL/Python function "view_and_set_discounted_sales"
 
-PostgreSQL with above log level (notice) will not only show you your *info* messages but also **context**. That is something that is very helpful with debugging production cases. Once function is being called from context you can see what kind of triggers or sub-functions were called. Example message
+PostgreSQL with above log level (notice) will not only show you your *info* messages but also **context** in which it's been logged. That is something that is very helpful with debugging production cases. Once function is being called from context statement you can see what kind of triggers or sub-functions were called. Example message
 
     INFO:  [view_and_set_discounted_sales] Updating item id: 45 with new discounted price: 3.37963644177
     CONTEXT:  PL/Python function "view_and_set_discounted_sales"
     
-Let's analyze that example.
+Let's stop here for a minute and analyze that example.
 
 *INFO* - log level of the message
 *[view_and_set_discounted_sales] Updating item id: 45 with new discounted price: 3.37963644177* - Custom message that function prints out
@@ -236,6 +236,7 @@ To be able to control **log level** that PostgreSQL is going to catch or ignore 
 
 
 Available values of log level in order of decreasing detail:
+
 1. debug5
 2. debug4
 3. debug3
@@ -247,44 +248,79 @@ Available values of log level in order of decreasing detail:
 9. error
 
 
-As I mentioned before you have an access to all Python modules and standard libraries. First install Redis module.
+## Database schema
 
-    /opt/py/bin/pip install redis
-    
- Below you can see how to access Redis and store some data in it.
+First comes first. Below you can see structure of tables and relations for database *pie* which I will use in future examples.
 
-    create or replace function logic.get_active_bills()
-    returns text as
-    $$
+    CREATE TABLE client
+    (
+      id bigserial NOT NULL,
+      row_change_time timestamp without time zone NOT NULL,
+      c_name varchar,
+      c_surname varchar,
+      dob date,
+      e_mail varchar,
+      CONSTRAINT client_pkey PRIMARY KEY (id),
+      CONSTRAINT client_email_key UNIQUE (e_mail)
+    );
     
-    import redis
-    from cPickle import loads
-    from cjson import encode
     
-    in_server = '127.0.0.1'
-    in_port = 6379
+    CREATE TABLE item
+    (
+        id bigserial NOT NULL,
+        item_name text,
+        item_price Decimal(10,2),
+        item_serial_nr varchar(32),
+        active boolean,
+      CONSTRAINT item_pkey PRIMARY KEY (id),
+      CONSTRAINT item_name_id_key UNIQUE (item_name, item_serial_nr)
+    );
     
-    POOL = redis.ConnectionPool(host=in_server, port = in_port if in_port is not None else 6379, db = 1)
-    r = redis.Redis(connection_pool = POOL)
+    CREATE TABLE bill
+    (
+      id bigserial NOT NULL,
+      bill_created timestamp without time zone NOT NULL,
+      shop_code varchar(32) NOT NULL,
+      field_hash varchar(32) NOT NULL,
+      client_id bigint NOT NULL,
+      bill_sent boolean default false,
+      bill_number varchar,
+      CONSTRAINT bill_pkey PRIMARY KEY (id),
+      CONSTRAINT billcode_hash_key UNIQUE (shop_code, field_hash)
+      
+    );
     
-    status = {'msg' : '', 'status' : False } # let False means error, True - all OK
-    bills = r.keys('bill_active:*')
-    all_bills = []
-    for k in bills if bills else []:
-        out = r.get(k)
-        if out is None:
-            continue
-        data = loads(out)
-        all_bills.append(data)
+    ALTER TABLE bill
+      ADD FOREIGN KEY (client_id) REFERENCES client (id) ON DELETE CASCADE ON UPDATE CASCADE;
     
-    return encode({'status' : status, 'data' : all_bills})
-    $$
-    LANGUAGE plpythonu VOLATILE;
-
+    
+    
+    CREATE TABLE bill_item
+    (
+        id bigserial NOT NULL,
+        item_name text,
+        item_qty int,
+        item_price float,
+        item_discount_value float default 0,
+        item_id bigint,
+        bill_id bigint,
+      CONSTRAINT bill_item_pkey PRIMARY KEY (id),
+      CONSTRAINT bill_name_id_key UNIQUE (bill_id, item_id)
+    );
+    
+    ALTER TABLE bill_item
+      ADD FOREIGN KEY (item_id) REFERENCES item (id) ON DELETE CASCADE ON UPDATE CASCADE;
+    ALTER TABLE bill_item
+      ADD FOREIGN KEY (bill_id) REFERENCES bill(id) ON DELETE CASCADE ON UPDATE CASCADE;
+    
+    
+    CREATE SCHEMA logic;
+    
+    CREATE SEQUENCE public.bill_number_seq;
 
 ## Business logic basics
 
-For building business logic I will use trigger functions on tables that I am going to create. Doesn't matter if tables are going to be controlled by any ORM or they are going to get accessed by using pure SQL. Each time data is being changed trigger will be used and corresponding trigger function is going to be called. Of course when to call triggered function is up to your defined use cases. Actions can be taken before or after update, insert or delete statement.
+For building business logic in database I will use trigger functions on tables that I am going to create. Doesn't matter if tables are going to be controlled by any ORM or they are going to get accessed by using pure SQL. Each time data is being changed trigger will be used and corresponding trigger function is going to be called. Of course when to call triggered function is up to your defined use cases. Actions can be taken before or after update, insert or delete statement.
 
 Example trigger on table foo is going to be called after insert
 
@@ -292,7 +328,10 @@ Example trigger on table foo is going to be called after insert
         AFTER INSERT ON table_foo
             FOR EACH ROW EXECUTE PROCEDURE my_trigger_function();
 
+
+
 ## Learning by doing
+
 
 To be able to protect some data from table foo from being deleted (by saving copy of data to backup table) let's use same trigger logic although this time before delete statement, ex.
 
@@ -398,22 +437,43 @@ As you can see in above example it is possible to create function which allows y
 
 In some cases it is really desired to have quick responses from DB. For heavy system most of developers will use caching systems that are coming with framework. That of course is fair but before data is accessible from cache we have to put data there which means we have to pre-fill cache by executing some SQL queries and cache the results.
 
-Let me show you different approach. If you create a plpy function which fills cache with data that you want to cache how to validate data? I will use trigger here. Each time one of my tables from which I want to cache data are going to get updates I will revalidate only that chunk of data that has changed. To illustrate such a case let's create a table.
+Let me show you different approach. If you create a plpython function which fills cache with data that you want to cache how to validate data? I will use trigger here. Each time one of my tables from which I want to cache data are going to get updates I will revalidate only that chunk of data that has changed. 
 
-    CREATE TABLE bill
-    (
-      id bigserial NOT NULL,
-      bill_created timestamp without time zone NOT NULL,
-      shop_code varchar(32) NOT NULL,
-      field_hash varchar(32) NOT NULL,
-      client_id bigint NOT NULL,
-      bill_sent boolean default false,
-      bill_number varchar,
-      CONSTRAINT bill_pkey PRIMARY KEY (id),
-      CONSTRAINT billcode_hash_key UNIQUE (shop_code, field_hash)
-    );
+As I mentioned before you have an access to all Python modules and standard libraries, so let's install Redis module.
 
-Once data is being changed on that table I am going to save/revalidate such a data in my cache. For caching I will use Redis. To be able to tell Redis what to update I will use trigger function as below.
+    /opt/py/bin/pip install redis
+    
+ Below you can see how to access Redis and store some data in it.
+
+    create or replace function logic.get_active_bills()
+    returns text as
+    $$
+    
+    import redis
+    from cPickle import loads
+    from cjson import encode
+    
+    in_server = '127.0.0.1'
+    in_port = 6379
+    
+    POOL = redis.ConnectionPool(host=in_server, port = in_port if in_port is not None else 6379, db = 1)
+    r = redis.Redis(connection_pool = POOL)
+    
+    status = {'msg' : '', 'status' : False } # let False means error, True - all OK
+    bills = r.keys('bill_active:*')
+    all_bills = []
+    for k in bills if bills else []:
+        out = r.get(k)
+        if out is None:
+            continue
+        data = loads(out)
+        all_bills.append(data)
+    
+    return encode({'status' : status, 'data' : all_bills})
+    $$
+    LANGUAGE plpythonu VOLATILE;
+
+Once data is being changed on table *bill* I am going to revalidate such a data in my cache. For caching I will use Redis. To be able to tell Redis what to update I will use trigger function as below.
 
     CREATE TRIGGER t_bill_i
         AFTER INSERT ON bill
